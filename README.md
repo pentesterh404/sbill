@@ -48,12 +48,28 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
   - `per_person = ceil(total_amount / num_people)`
 - `/link`
   - Registers caller to latest OPEN bill in that group
-  - Sends private payment link to caller
+  - Replies directly in group (as a reply to `/link`) with payment link
 
 ## Endpoints
 - `POST /telegram/webhook`
 - `GET /pay/:token`
 - `GET /health`
+
+## Vercel Deploy
+- This repo includes `vercel.json` + `api/index.ts` for serverless runtime.
+- `src/index.ts` is local-only entrypoint (for `npm run dev`).
+- Required Vercel env vars:
+  - `DATABASE_URL`
+  - `TELEGRAM_BOT_TOKEN`
+  - `APP_BASE_URL`
+  - `SERVER_SECRET`
+  - `PAY_TOKEN_TTL_SECONDS`
+  - `VIETQR_BANK_CODE`
+  - `VIETQR_ACCOUNT_NUMBER`
+  - `VIETQR_ACCOUNT_NAME`
+- Framework preset: `Other`
+- After deploy, set webhook to:
+  - `https://<your-vercel-domain>/telegram/webhook`
 
 ## Architecture
 - Webhook handler: `src/routes/telegram.route.ts`
@@ -64,7 +80,7 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 ## Security Notes
 - Identity is taken only from Telegram update payload (`message.from` / `callback_query.from`)
 - Amount is fixed server-side from bill data
-- Pay token is HMAC-SHA256 over `bill_id:telegram_id`
+- Pay token is HMAC-SHA256 over `bill_id + telegram_id`
 - Token is stored server-side with expiry
 - One participant per bill (`@@unique([bill_id, telegram_id])`)
 - Duplicate `/link` returns existing participant link
