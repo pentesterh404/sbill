@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BillStatus {
+  OPEN
+  CLOSED
+}
+
+enum ParticipantStatus {
+  UNPAID
+  PAID
+}
+
+model Bill {
+  id                 String        @id @default(uuid())
+  group_chat_id      String
+  owner_telegram_id  String
+  total_amount       Int
+  per_person_amount  Int
+  note               String?
+  status             BillStatus    @default(OPEN)
+  created_at         DateTime      @default(now())
+  participants       Participant[]
+
+  @@index([group_chat_id, status, created_at(sort: Desc)])
+}
+
+model Participant {
+  id                String            @id @default(uuid())
+  bill_id           String
+  telegram_id       String
+  telegram_username String
+  amount            Int
+  status            ParticipantStatus @default(UNPAID)
+  pay_token         String            @unique
+  pay_token_expires_at DateTime
+  paid_at           DateTime?
+
+  bill Bill @relation(fields: [bill_id], references: [id], onDelete: Cascade)
+
+  @@unique([bill_id, telegram_id])
+  @@index([pay_token_expires_at])
+}

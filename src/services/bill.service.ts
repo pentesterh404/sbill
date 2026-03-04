@@ -1,0 +1,57 @@
+import { Bill } from "@prisma/client";
+import { prisma } from "../lib/prisma";
+import { AppError } from "../lib/errors";
+
+export function parseSplitCommand(text: string): { totalAmount: number; numPeople: number; note?: string } {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^\/s(?:@\w+)?\s+(\d+)\s+(\d+)(?:\s+([\s\S]+))?$/);
+
+  if (!match) {
+    throw new AppError("Invalid /s command format. Use: /s <total_amount> <num_people> <note?>", 400);
+  }
+
+  const totalAmount = Number(match[1]);
+  const numPeople = Number(match[2]);
+  const note = match[3]?.trim();
+
+  if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
+    throw new AppError("total_amount must be a positive integer", 400);
+  }
+
+  if (!Number.isInteger(numPeople) || numPeople <= 0 || numPeople > 1000) {
+    throw new AppError("num_people must be a positive integer <= 1000", 400);
+  }
+
+  return { totalAmount, numPeople, note };
+}
+
+export async function createBill(params: {
+  groupChatId: string;
+  ownerTelegramId: string;
+  totalAmount: number;
+  numPeople: number;
+  note?: string;
+}): Promise<Bill> {
+  const perPersonAmount = Math.ceil(params.totalAmount / params.numPeople);
+
+  return prisma.bill.create({
+    data: {
+      group_chat_id: params.groupChatId,
+      owner_telegram_id: params.ownerTelegramId,
+      total_amount: params.totalAmount,
+      per_person_amount: perPersonAmount,
+      note: params.note,
+      status: "OPEN",
+    },
+  });
+}
+
+export async function getLatestOpenBill(groupChatId: string): Promise<Bill | null> {
+  return prisma.bill.findFirst({
+    where: {
+      group_chat_id: groupChatId,
+      status: "OPEN",
+    },
+    orderBy: { created_at: "desc" },
+  });
+}
