@@ -4,15 +4,11 @@ import { env } from "../config";
 import { AppError } from "../lib/errors";
 import { logError, logInfo } from "../lib/logger";
 import { createBill, parseSplitCommand } from "../services/bill.service";
-import { registerParticipant } from "../services/participant.service";
-import { sendMessage, sendPhoto } from "../services/telegram.service";
+import { sendMessage, sendPhotoBuffer } from "../services/telegram.service";
+import { generateVietQrPng } from "../services/vietqr.service";
 import { TelegramUpdate } from "../types/telegram";
 
 const router = Router();
-
-function parsePayCommand(text: string): boolean {
-  return /^\/p(?:@\w+)?$/i.test(text.trim());
-}
 
 function safeEqualString(a: string, b: string): boolean {
   const aBuf = Buffer.from(a, "utf8");
@@ -25,6 +21,14 @@ function extractCommand(text?: string): string | null {
   if (!text) return null;
   const command = text.trim().split(/\s+/)[0];
   return command || null;
+}
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 router.post("/webhook", async (req, res) => {
@@ -95,81 +99,28 @@ router.post("/webhook", async (req, res) => {
         perPersonAmount: bill.per_person_amount,
       });
 
-      await sendMessage(
-        messageChatId,
-        `Bill created. ID: ${bill.id}\nPer person: ${bill.per_person_amount}\nEveryone run /p in this group to receive your payment link as a reply in this group.`,
-      );
-
-      res.status(200).json({ ok: true });
-      return;
-    }
-
-    if (parsePayCommand(text)) {
-      logInfo("Handling /p command", {
-        updateId: update.update_id,
-        chatId: messageChatId,
-        actorId,
+      const transferNote = parsed.note?.trim() || "(khong co)";
+      const bankName = env.VIETQR_BANK_NAME ?? env.VIETQR_BANK_CODE;
+      const qrPng = await generateVietQrPng({
+        bankCode: env.VIETQR_BANK_CODE,
+        accountNumber: env.VIETQR_ACCOUNT_NUMBER,
+        accountName: env.VIETQR_ACCOUNT_NAME,
+        amount: bill.per_person_amount,
       });
-      if (chatType !== "group" && chatType !== "supergroup") {
-        throw new AppError("/p is only allowed in group chats", 400);
-      }
+      const caption =
+        `<b>Thong tin chia bill:</b>\n` +
+        `Bank: <code>${escapeHtml(bankName)}</code>\n` +
+        `STK: <code>${escapeHtml(env.VIETQR_ACCOUNT_NUMBER)}</code>\n` +
+        `So tien: <code>${bill.total_amount}</code>\n` +
+        `So nguoi: <code>${parsed.numPeople}</code>\n` +
+        `Moi nguoi: <code>${bill.per_person_amount}</code>\n` +
+        `Noi dung: <code>${escapeHtml(transferNote)}</code>`;
 
-      const { participant, alreadyRegistered, matchedByUsername } = await registerParticipant({
-        groupChatId: messageChatId,
-        telegramId: actorId,
-        username: actor.username,
-        firstName: actor.first_name,
+      await sendPhotoBuffer(messageChatId, qrPng, caption, {
+        replyToMessageId: message.message_id,
+        parseMode: "HTML",
+        filename: `bill-${bill.id}.png`,
       });
-
-      const appBaseUrl = env.APP_BASE_URL.replace(/\/+$/, "");
-      const payUrl = `${appBaseUrl}/pay/${participant.pay_token}`;
-      const qrUrl = `${appBaseUrl}/pay/${participant.pay_token}/qr.png`;
-      const displayName = actor.username ? `@${actor.username}` : actor.first_name;
-      const isExactTelegramIdMatch = participant.telegram_id === actorId;
-
-      logInfo("Participant link generated", {
-        participantId: participant.id,
-        billId: participant.bill_id,
-        telegramId: participant.telegram_id,
-        actorId,
-        isExactTelegramIdMatch,
-        alreadyRegistered,
-        matchedByUsername,
-        participantStatus: participant.status,
-      });
-
-      if (participant.status === "PAID" && isExactTelegramIdMatch) {
-        await sendMessage(
-          messageChatId,
-          `${displayName} PAID.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nStatus: PAID`,
-          { replyToMessageId: message.message_id },
-        );
-
-        res.status(200).json({ ok: true });
-        return;
-      }
-
-      if (matchedByUsername && !isExactTelegramIdMatch) {
-        await sendMessage(
-          messageChatId,
-          `${displayName} found an existing username entry in latest bill, but Telegram ID does not match.\nPlease ask admin to verify manually.`,
-          { replyToMessageId: message.message_id },
-        );
-
-        res.status(200).json({ ok: true });
-        return;
-      }
-
-      await sendPhoto(
-        messageChatId,
-        qrUrl,
-        alreadyRegistered
-          ? `${displayName} you already joined this bill.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nPay link: ${payUrl}${
-              matchedByUsername ? "\nMatched by username." : ""
-            }`
-          : `${displayName} registered successfully.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nPay link: ${payUrl}`,
-        { replyToMessageId: message.message_id },
-      );
 
       res.status(200).json({ ok: true });
       return;

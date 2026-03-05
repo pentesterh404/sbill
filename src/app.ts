@@ -2,8 +2,6 @@ import express, { NextFunction, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import { AppError } from "./lib/errors";
 import { logError, logInfo } from "./lib/logger";
-import adminRouter from "./routes/admin.route";
-import payRouter from "./routes/pay.route";
 import telegramRouter from "./routes/telegram.route";
 
 export function createApp() {
@@ -15,23 +13,8 @@ export function createApp() {
     legacyHeaders: false,
     message: { error: "Too many webhook requests" },
   });
-  const payRateLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 60,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many pay requests" },
-  });
-  const adminRateLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 30,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many admin requests" },
-  });
 
   app.use(express.json({ limit: "1mb" }));
-  app.use(express.urlencoded({ extended: false }));
   app.use((req, res, next) => {
     const start = Date.now();
     logInfo("HTTP request start", {
@@ -69,8 +52,7 @@ export function createApp() {
 
           <h2>Telegram Commands</h2>
           <ul>
-            <li><code>/s &lt;total_amount&gt; &lt;num_people&gt; &lt;note?&gt;</code> - Create a new OPEN bill in group chat.</li>
-            <li><code>/p</code> - Register yourself to latest OPEN bill and receive payment link reply in group.</li>
+            <li><code>/s &lt;total_amount&gt; [&lt;num_people&gt;] [&lt;note&gt;]</code> - Create bill and send split QR immediately in group.</li>
           </ul>
         </body>
       </html>
@@ -78,8 +60,6 @@ export function createApp() {
   });
 
   app.use("/telegram", telegramRateLimiter, telegramRouter);
-  app.use("/pay", payRateLimiter, payRouter);
-  app.use("/admin", adminRateLimiter, adminRouter);
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const statusCode = err instanceof AppError ? err.statusCode : 500;

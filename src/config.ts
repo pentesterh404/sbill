@@ -3,14 +3,10 @@ import { z } from "zod";
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).optional(),
   PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.string().min(1),
   TELEGRAM_BOT_TOKEN: z.string().min(1),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(8).optional(),
-  APP_BASE_URL: z.string().url(),
-  SERVER_SECRET: z.string().min(32),
-  ADMIN_DASHBOARD_KEY: z.string().min(8).optional(),
-  PAY_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   VIETQR_BANK_CODE: z.string().min(3),
+  VIETQR_BANK_NAME: z.string().min(2).optional(),
   VIETQR_ACCOUNT_NUMBER: z.string().min(4),
   VIETQR_ACCOUNT_NAME: z.string().min(2),
 });

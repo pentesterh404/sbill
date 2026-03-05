@@ -25,7 +25,8 @@ export function sanitizeTransferDescription(raw: string): string {
   const noPipes = raw.replace(/\|/g, "-");
   const safeCharsOnly = noPipes.replace(/[^\p{L}\p{N} ._\-/]/gu, "");
   const compact = safeCharsOnly.replace(/\s+/g, " ").trim();
-  return compact.slice(0, 50);
+  const shortened = compact.slice(0, 50);
+  return shortened.length > 0 ? shortened : "khong co";
 }
 
 export function buildVietQrPayload(input: {
@@ -33,7 +34,7 @@ export function buildVietQrPayload(input: {
   accountNumber: string;
   accountName: string;
   amount: number;
-  description: string;
+  description?: string;
 }): string {
   const beneficiary = tlv("00", input.bankCode) + tlv("01", input.accountNumber);
   const vietQrService = tlv("01", beneficiary) + tlv("02", "QRIBFTTA");
@@ -42,7 +43,8 @@ export function buildVietQrPayload(input: {
     tlv("00", "A000000727") + vietQrService,
   );
 
-  const additionalData = tlv("62", tlv("08", input.description));
+  const description = input.description?.trim() ?? "";
+  const additionalData = description ? tlv("62", tlv("08", description)) : "";
 
   const payloadWithoutCrc =
     tlv("00", "01") +
@@ -64,7 +66,7 @@ export async function generateVietQrSvg(input: {
   accountNumber: string;
   accountName: string;
   amount: number;
-  description: string;
+  description?: string;
 }): Promise<string> {
   const payload = buildVietQrPayload(input);
   return QRCode.toString(payload, {
@@ -80,7 +82,7 @@ export async function generateVietQrPng(input: {
   accountNumber: string;
   accountName: string;
   amount: number;
-  description: string;
+  description?: string;
 }): Promise<Buffer> {
   const payload = buildVietQrPayload(input);
   return QRCode.toBuffer(payload, {

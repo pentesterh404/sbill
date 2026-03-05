@@ -1,7 +1,6 @@
 import "dotenv/config";
 import type { Server } from "node:http";
 import { env } from "./config";
-import { prisma } from "./lib/prisma";
 import { app } from "./app";
 
 const MAX_PORT_ATTEMPTS = 20;
@@ -49,12 +48,10 @@ async function shutdown(signal: string): Promise<void> {
   // eslint-disable-next-line no-console
   console.log(`Received ${signal}. Graceful shutdown...`);
   if (!server) {
-    await prisma.$disconnect();
     process.exit(0);
   }
 
-  server.close(async () => {
-    await prisma.$disconnect();
+  server.close(() => {
     process.exit(0);
   });
 }
@@ -70,6 +67,5 @@ process.on("SIGTERM", () => {
 void startServer().catch(async (error) => {
   // eslint-disable-next-line no-console
   console.error("Failed to start server:", error);
-  await prisma.$disconnect();
   process.exit(1);
 });
