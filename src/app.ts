@@ -1,12 +1,55 @@
 import express, { NextFunction, Request, Response } from "express";
+import rateLimit from "express-rate-limit";
 import { AppError } from "./lib/errors";
+import { logError, logInfo } from "./lib/logger";
+import adminRouter from "./routes/admin.route";
 import payRouter from "./routes/pay.route";
 import telegramRouter from "./routes/telegram.route";
 
 export function createApp() {
   const app = express();
+  const telegramRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many webhook requests" },
+  });
+  const payRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many pay requests" },
+  });
+  const adminRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many admin requests" },
+  });
 
   app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ extended: false }));
+  app.use((req, res, next) => {
+    const start = Date.now();
+    logInfo("HTTP request start", {
+      method: req.method,
+      path: req.path,
+    });
+
+    res.on("finish", () => {
+      logInfo("HTTP request done", {
+        method: req.method,
+        path: req.path,
+        statusCode: res.statusCode,
+        durationMs: Date.now() - start,
+      });
+    });
+
+    next();
+  });
 
   app.get("/health", (_req, res) => {
     res.status(200).json({ ok: true });
@@ -27,7 +70,7 @@ export function createApp() {
           <h2>Telegram Commands</h2>
           <ul>
             <li><code>/s &lt;total_amount&gt; &lt;num_people&gt; &lt;note?&gt;</code> - Create a new OPEN bill in group chat.</li>
-            <li><code>/link</code> - Register yourself to latest OPEN bill and receive private payment link.</li>
+            <li><code>/link</code> - Register yourself to latest OPEN bill and receive payment link reply in group.</li>
           </ul>
 
           <h2>HTTP Endpoints</h2>
@@ -35,27 +78,29 @@ export function createApp() {
             <li><code>POST /telegram/webhook</code></li>
             <li><code>GET /pay/:token</code></li>
             <li><code>GET /health</code></li>
+            <li><code>GET /admin?key=YOUR_ADMIN_DASHBOARD_KEY</code></li>
           </ul>
 
           <h2>Quick Checks</h2>
           <ul>
             <li><a href="/health">Health Check</a></li>
+            <li><code>/admin?key=YOUR_ADMIN_DASHBOARD_KEY</code></li>
           </ul>
         </body>
       </html>
     `);
   });
 
-  app.use("/telegram", telegramRouter);
-  app.use("/pay", payRouter);
+  app.use("/telegram", telegramRateLimiter, telegramRouter);
+  app.use("/pay", payRateLimiter, payRouter);
+  app.use("/admin", adminRateLimiter, adminRouter);
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     const statusCode = err instanceof AppError ? err.statusCode : 500;
     const message = err instanceof AppError ? err.message : "Internal server error";
 
     if (statusCode >= 500) {
-      // eslint-disable-next-line no-console
-      console.error(err);
+      logError("Unhandled application error", err, { statusCode });
     }
 
     res.status(statusCode).json({ error: message });

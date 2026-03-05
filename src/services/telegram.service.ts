@@ -1,4 +1,5 @@
 import { env } from "../config";
+import { logError } from "../lib/logger";
 
 const apiBase = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
@@ -11,6 +12,11 @@ async function telegramRequest(method: string, payload: Record<string, unknown>)
 
   if (!response.ok) {
     const body = await response.text();
+    logError("Telegram API request failed", undefined, {
+      method,
+      status: response.status,
+      body,
+    });
     throw new Error(`Telegram API ${method} failed: ${response.status} ${body}`);
   }
 }

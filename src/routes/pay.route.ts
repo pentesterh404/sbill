@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { env } from "../config";
+import { logError, logInfo } from "../lib/logger";
 import { getParticipantByValidToken } from "../services/participant.service";
 import { buildVietQrPayload, generateVietQrSvg, sanitizeTransferDescription } from "../services/vietqr.service";
 
@@ -20,9 +21,14 @@ const buildCompactPayId = (billId: string, telegramId: string): string => {
 router.get("/:token", async (req, res, next) => {
   try {
     const token = req.params.token;
+    logInfo("Pay link requested", { tokenPrefix: token.slice(0, 8) });
     const participant = await getParticipantByValidToken(token);
 
     if (participant.status === "PAID") {
+      logInfo("Pay link opened for already paid participant", {
+        participantId: participant.id,
+        billId: participant.bill.id,
+      });
       res.status(200).type("html").send(`
         <html>
           <body>
@@ -37,6 +43,12 @@ router.get("/:token", async (req, res, next) => {
 
     const compactPayId = buildCompactPayId(participant.bill_id, participant.telegram_id);
     const description = sanitizeTransferDescription(`${compactPayId}-${participant.telegram_username}`);
+    logInfo("Rendering unpaid QR", {
+      participantId: participant.id,
+      billId: participant.bill_id,
+      amount: participant.amount,
+      description,
+    });
     const payload = buildVietQrPayload({
       bankCode: env.VIETQR_BANK_CODE,
       accountNumber: env.VIETQR_ACCOUNT_NUMBER,
@@ -71,6 +83,7 @@ router.get("/:token", async (req, res, next) => {
       </html>
     `);
   } catch (error) {
+    logError("Failed to render pay link", error, { tokenPrefix: req.params.token.slice(0, 8) });
     next(error);
   }
 });

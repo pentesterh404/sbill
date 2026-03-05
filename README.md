@@ -14,8 +14,10 @@ Copy `.env.example` to `.env` and configure:
 - `DATABASE_URL`: PostgreSQL connection string
 - `PORT`: HTTP port (default `3000`)
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token
+- `TELEGRAM_WEBHOOK_SECRET`: Secret token to validate Telegram webhook header
 - `APP_BASE_URL`: Public base URL for pay links (e.g. `https://your-domain.com`)
 - `SERVER_SECRET`: Long random secret (>=32 chars) for HMAC
+- `ADMIN_DASHBOARD_KEY`: Secret key for manual payment admin dashboard
 - `PAY_TOKEN_TTL_SECONDS`: Pay token lifetime (seconds)
 - `VIETQR_BANK_CODE`: VietQR/NAPAS bank code
 - `VIETQR_ACCOUNT_NUMBER`: Receiver account number
@@ -29,6 +31,11 @@ npx prisma migrate dev --name init
 npm run dev
 ```
 
+## Database Connection Test
+```bash
+npm run test:db
+```
+
 ## Telegram Webhook
 Set webhook to:
 
@@ -39,7 +46,7 @@ Example:
 ```bash
 curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://your-domain.com/telegram/webhook"}'
+  -d '{"url":"https://your-domain.com/telegram/webhook","secret_token":"<TELEGRAM_WEBHOOK_SECRET>"}'
 ```
 
 ## Commands
@@ -54,6 +61,13 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 - `POST /telegram/webhook`
 - `GET /pay/:token`
 - `GET /health`
+- `GET /admin?key=<ADMIN_DASHBOARD_KEY>`
+- `POST /admin/participants/:participantId/confirm`
+
+## Admin Dashboard (Manual Confirm)
+- Open: `https://<your-domain>/admin?key=<ADMIN_DASHBOARD_KEY>`
+- Confirm payment manually by clicking `Confirm PAID` for a participant.
+- When all participants are `PAID`, bill is auto-marked `CLOSED`.
 
 ## Vercel Deploy
 - This repo includes `vercel.json` + `api/index.ts` for serverless runtime.
@@ -61,8 +75,10 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 - Required Vercel env vars:
   - `DATABASE_URL`
   - `TELEGRAM_BOT_TOKEN`
+  - `TELEGRAM_WEBHOOK_SECRET`
   - `APP_BASE_URL`
   - `SERVER_SECRET`
+  - `ADMIN_DASHBOARD_KEY`
   - `PAY_TOKEN_TTL_SECONDS`
   - `VIETQR_BANK_CODE`
   - `VIETQR_ACCOUNT_NUMBER`

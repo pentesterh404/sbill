@@ -93,3 +93,62 @@ export async function getParticipantByValidToken(token: string): Promise<Partici
 
   return participant;
 }
+
+export async function markParticipantPaid(participantId: string): Promise<Participant & { bill: { id: string; status: "OPEN" | "CLOSED" } }> {
+  const current = await prisma.participant.findUnique({
+    where: { id: participantId },
+    include: {
+      bill: {
+        select: {
+          id: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!current) {
+    throw new AppError("Participant not found", 404);
+  }
+
+  if (current.status === ParticipantStatus.PAID) {
+    return current;
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const paidParticipant = await tx.participant.update({
+      where: { id: participantId },
+      data: {
+        status: ParticipantStatus.PAID,
+        paid_at: new Date(),
+      },
+      include: {
+        bill: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    const unpaidCount = await tx.participant.count({
+      where: {
+        bill_id: paidParticipant.bill_id,
+        status: ParticipantStatus.UNPAID,
+      },
+    });
+
+    if (unpaidCount === 0) {
+      await tx.bill.update({
+        where: { id: paidParticipant.bill_id },
+        data: { status: "CLOSED" },
+      });
+      paidParticipant.bill.status = "CLOSED";
+    }
+
+    return paidParticipant;
+  });
+
+  return updated;
+}
