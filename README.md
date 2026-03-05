@@ -72,6 +72,7 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 ## Commands
 - `/s <total_amount> <num_people> <note?>`
   - Creates OPEN bill in the group
+  - `total_amount` supports `k` suffix (example: `10k` = `10000`)
   - `per_person = ceil(total_amount / num_people)`
 - `/p`
   - Registers caller to latest OPEN bill in that group
