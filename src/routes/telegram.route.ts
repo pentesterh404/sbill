@@ -5,13 +5,13 @@ import { AppError } from "../lib/errors";
 import { logError, logInfo } from "../lib/logger";
 import { createBill, parseSplitCommand } from "../services/bill.service";
 import { registerParticipant } from "../services/participant.service";
-import { sendMessage } from "../services/telegram.service";
+import { sendMessage, sendPhoto } from "../services/telegram.service";
 import { TelegramUpdate } from "../types/telegram";
 
 const router = Router();
 
-function parseLinkCommand(text: string): boolean {
-  return /^\/link(?:@\w+)?$/i.test(text.trim());
+function parsePayCommand(text: string): boolean {
+  return /^\/p(?:@\w+)?$/i.test(text.trim());
 }
 
 function safeEqualString(a: string, b: string): boolean {
@@ -97,44 +97,76 @@ router.post("/webhook", async (req, res) => {
 
       await sendMessage(
         messageChatId,
-        `Bill created. ID: ${bill.id}\nPer person: ${bill.per_person_amount}\nEveryone run /link in this group to receive a private payment link.`,
+        `Bill created. ID: ${bill.id}\nPer person: ${bill.per_person_amount}\nEveryone run /p in this group to receive your payment link as a reply in this group.`,
       );
 
       res.status(200).json({ ok: true });
       return;
     }
 
-    if (parseLinkCommand(text)) {
-      logInfo("Handling /link command", {
+    if (parsePayCommand(text)) {
+      logInfo("Handling /p command", {
         updateId: update.update_id,
         chatId: messageChatId,
         actorId,
       });
       if (chatType !== "group" && chatType !== "supergroup") {
-        throw new AppError("/link is only allowed in group chats", 400);
+        throw new AppError("/p is only allowed in group chats", 400);
       }
 
-      const { participant, alreadyRegistered } = await registerParticipant({
+      const { participant, alreadyRegistered, matchedByUsername } = await registerParticipant({
         groupChatId: messageChatId,
         telegramId: actorId,
         username: actor.username,
         firstName: actor.first_name,
       });
 
-      const payUrl = `${env.APP_BASE_URL}/pay/${participant.pay_token}`;
+      const appBaseUrl = env.APP_BASE_URL.replace(/\/+$/, "");
+      const payUrl = `${appBaseUrl}/pay/${participant.pay_token}`;
+      const qrUrl = `${appBaseUrl}/pay/${participant.pay_token}/qr.png`;
       const displayName = actor.username ? `@${actor.username}` : actor.first_name;
+      const isExactTelegramIdMatch = participant.telegram_id === actorId;
 
       logInfo("Participant link generated", {
         participantId: participant.id,
         billId: participant.bill_id,
         telegramId: participant.telegram_id,
+        actorId,
+        isExactTelegramIdMatch,
         alreadyRegistered,
+        matchedByUsername,
+        participantStatus: participant.status,
       });
 
-      await sendMessage(
+      if (participant.status === "PAID" && isExactTelegramIdMatch) {
+        await sendMessage(
+          messageChatId,
+          `${displayName} PAID.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nStatus: PAID`,
+          { replyToMessageId: message.message_id },
+        );
+
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (matchedByUsername && !isExactTelegramIdMatch) {
+        await sendMessage(
+          messageChatId,
+          `${displayName} found an existing username entry in latest bill, but Telegram ID does not match.\nPlease ask admin to verify manually.`,
+          { replyToMessageId: message.message_id },
+        );
+
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      await sendPhoto(
         messageChatId,
+        qrUrl,
         alreadyRegistered
-          ? `${displayName} you already joined this bill.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nPay link: ${payUrl}`
+          ? `${displayName} you already joined this bill.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nPay link: ${payUrl}${
+              matchedByUsername ? "\nMatched by username." : ""
+            }`
           : `${displayName} registered successfully.\nBill: ${participant.bill_id}\nAmount: ${participant.amount}\nPay link: ${payUrl}`,
         { replyToMessageId: message.message_id },
       );

@@ -55,3 +55,22 @@ export async function getLatestOpenBill(groupChatId: string): Promise<Bill | nul
     orderBy: { created_at: "desc" },
   });
 }
+
+export async function cancelBillById(billId: string): Promise<Bill> {
+  const existing = await prisma.bill.findUnique({
+    where: { id: billId },
+  });
+
+  if (!existing) {
+    throw new AppError("Bill not found", 404);
+  }
+
+  if (existing.status === "CLOSED") {
+    return existing;
+  }
+
+  return prisma.bill.update({
+    where: { id: billId },
+    data: { status: "CLOSED" },
+  });
+}

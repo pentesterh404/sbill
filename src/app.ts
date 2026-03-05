@@ -70,21 +70,7 @@ export function createApp() {
           <h2>Telegram Commands</h2>
           <ul>
             <li><code>/s &lt;total_amount&gt; &lt;num_people&gt; &lt;note?&gt;</code> - Create a new OPEN bill in group chat.</li>
-            <li><code>/link</code> - Register yourself to latest OPEN bill and receive payment link reply in group.</li>
-          </ul>
-
-          <h2>HTTP Endpoints</h2>
-          <ul>
-            <li><code>POST /telegram/webhook</code></li>
-            <li><code>GET /pay/:token</code></li>
-            <li><code>GET /health</code></li>
-            <li><code>GET /admin?key=YOUR_ADMIN_DASHBOARD_KEY</code></li>
-          </ul>
-
-          <h2>Quick Checks</h2>
-          <ul>
-            <li><a href="/health">Health Check</a></li>
-            <li><code>/admin?key=YOUR_ADMIN_DASHBOARD_KEY</code></li>
+            <li><code>/p</code> - Register yourself to latest OPEN bill and receive payment link reply in group.</li>
           </ul>
         </body>
       </html>

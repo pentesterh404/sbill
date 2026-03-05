@@ -23,7 +23,7 @@ function crc16Ccitt(input: string): string {
 
 export function sanitizeTransferDescription(raw: string): string {
   const noPipes = raw.replace(/\|/g, "-");
-  const safeCharsOnly = noPipes.replace(/[^a-zA-Z0-9 ._\-/]/g, "");
+  const safeCharsOnly = noPipes.replace(/[^\p{L}\p{N} ._\-/]/gu, "");
   const compact = safeCharsOnly.replace(/\s+/g, " ").trim();
   return compact.slice(0, 50);
 }
@@ -72,5 +72,21 @@ export async function generateVietQrSvg(input: {
     errorCorrectionLevel: "M",
     margin: 1,
     width: 320,
+  });
+}
+
+export async function generateVietQrPng(input: {
+  bankCode: string;
+  accountNumber: string;
+  accountName: string;
+  amount: number;
+  description: string;
+}): Promise<Buffer> {
+  const payload = buildVietQrPayload(input);
+  return QRCode.toBuffer(payload, {
+    type: "png",
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 640,
   });
 }

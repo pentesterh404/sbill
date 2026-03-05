@@ -28,7 +28,7 @@ export async function registerParticipant(input: {
   telegramId: string;
   username?: string;
   firstName: string;
-}): Promise<{ participant: Participant; alreadyRegistered: boolean }> {
+}): Promise<{ participant: Participant; alreadyRegistered: boolean; matchedByUsername: boolean }> {
   const bill = await getLatestOpenBill(input.groupChatId);
   if (!bill) {
     throw new AppError("No OPEN bill found for this group", 404);
@@ -44,7 +44,20 @@ export async function registerParticipant(input: {
   });
 
   if (existing) {
-    return { participant: existing, alreadyRegistered: true };
+    return { participant: existing, alreadyRegistered: true, matchedByUsername: false };
+  }
+
+  if (input.username) {
+    const existingByUsername = await prisma.participant.findFirst({
+      where: {
+        bill_id: bill.id,
+        telegram_username: input.username,
+      },
+    });
+
+    if (existingByUsername) {
+      return { participant: existingByUsername, alreadyRegistered: true, matchedByUsername: true };
+    }
   }
 
   const payToken = generatePayToken(bill.id, input.telegramId);
@@ -62,7 +75,7 @@ export async function registerParticipant(input: {
     },
   });
 
-  return { participant, alreadyRegistered: false };
+  return { participant, alreadyRegistered: false, matchedByUsername: false };
 }
 
 export async function getParticipantByValidToken(token: string): Promise<Participant & { bill: { id: string; note: string | null } }> {
@@ -151,4 +164,54 @@ export async function markParticipantPaid(participantId: string): Promise<Partic
   });
 
   return updated;
+}
+
+export async function confirmAllParticipantsPaidForBill(billId: string): Promise<{
+  billId: string;
+  billStatus: "OPEN" | "CLOSED";
+  updatedCount: number;
+}> {
+  const bill = await prisma.bill.findUnique({
+    where: { id: billId },
+    select: { id: true, status: true },
+  });
+
+  if (!bill) {
+    throw new AppError("Bill not found", 404);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const updateMany = await tx.participant.updateMany({
+      where: {
+        bill_id: billId,
+        status: ParticipantStatus.UNPAID,
+      },
+      data: {
+        status: ParticipantStatus.PAID,
+        paid_at: now,
+      },
+    });
+
+    const participantCount = await tx.participant.count({
+      where: { bill_id: billId },
+    });
+
+    let billStatus: "OPEN" | "CLOSED" = bill.status;
+    if (participantCount > 0) {
+      await tx.bill.update({
+        where: { id: billId },
+        data: { status: "CLOSED" },
+      });
+      billStatus = "CLOSED";
+    }
+
+    return {
+      billId,
+      billStatus,
+      updatedCount: updateMany.count,
+    };
+  });
+
+  return result;
 }

@@ -33,3 +33,17 @@ export async function sendMessage(
     reply_to_message_id: options?.replyToMessageId,
   });
 }
+
+export async function sendPhoto(
+  chatId: string,
+  photoUrl: string,
+  caption: string,
+  options?: { replyToMessageId?: number },
+): Promise<void> {
+  await telegramRequest("sendPhoto", {
+    chat_id: chatId,
+    photo: photoUrl,
+    caption,
+    reply_to_message_id: options?.replyToMessageId,
+  });
+}

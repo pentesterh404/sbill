@@ -31,6 +31,26 @@ npx prisma migrate dev --name init
 npm run dev
 ```
 
+## Admin Desktop App
+```bash
+cd desktop-admin
+npm install
+npm start
+```
+
+- Enter backend base URL (for example: `http://localhost:3000` or production domain).
+- Enter `ADMIN_DASHBOARD_KEY`.
+- App opens `/admin` and sends `x-admin-key` header automatically for admin routes.
+
+Build Windows `.exe`:
+```bash
+cd desktop-admin
+npm install
+npm run build:win
+```
+
+Output installer: `desktop-admin/release/*.exe`
+
 ## Database Connection Test
 ```bash
 npm run test:db
@@ -53,9 +73,9 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 - `/s <total_amount> <num_people> <note?>`
   - Creates OPEN bill in the group
   - `per_person = ceil(total_amount / num_people)`
-- `/link`
+- `/p`
   - Registers caller to latest OPEN bill in that group
-  - Replies directly in group (as a reply to `/link`) with payment link
+  - Replies directly in group (as a reply to `/p`) with payment link
 
 ## Endpoints
 - `POST /telegram/webhook`
@@ -63,10 +83,14 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 - `GET /health`
 - `GET /admin?key=<ADMIN_DASHBOARD_KEY>`
 - `POST /admin/participants/:participantId/confirm`
+- `POST /admin/bills/:billId/confirm-all`
+- `POST /admin/bills/:billId/cancel`
 
 ## Admin Dashboard (Manual Confirm)
 - Open: `https://<your-domain>/admin?key=<ADMIN_DASHBOARD_KEY>`
 - Confirm payment manually by clicking `Confirm PAID` for a participant.
+- Confirm all unpaid participants in a bill by clicking `Confirm All PAID`.
+- Cancel a wrong bill by clicking `Cancel Bill` (no Telegram bot command needed).
 - When all participants are `PAID`, bill is auto-marked `CLOSED`.
 
 ## Vercel Deploy
@@ -99,5 +123,5 @@ curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
 - Pay token is HMAC-SHA256 over `bill_id + telegram_id`
 - Token is stored server-side with expiry
 - One participant per bill (`@@unique([bill_id, telegram_id])`)
-- Duplicate `/link` returns existing participant link
+- Duplicate `/p` returns existing participant link
 - Clean API errors (no stack traces in responses)

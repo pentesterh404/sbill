@@ -2,7 +2,7 @@ import { Router } from "express";
 import { env } from "../config";
 import { logError, logInfo } from "../lib/logger";
 import { getParticipantByValidToken } from "../services/participant.service";
-import { buildVietQrPayload, generateVietQrSvg, sanitizeTransferDescription } from "../services/vietqr.service";
+import { buildVietQrPayload, generateVietQrPng, generateVietQrSvg, sanitizeTransferDescription } from "../services/vietqr.service";
 
 const router = Router();
 const escapeHtml = (value: string) =>
@@ -12,11 +12,31 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-const buildCompactPayId = (billId: string, telegramId: string): string => {
-  const compactBillId = billId.replace(/-/g, "").slice(0, 16);
-  const compactTelegramId = telegramId.length > 6 ? telegramId.slice(-6) : telegramId;
-  return `${compactBillId}${compactTelegramId}`;
+const buildTransferDescription = (telegramUsername: string, note?: string | null) => {
+  const transferNote = note?.trim() || "";
+  return sanitizeTransferDescription(transferNote ? `${telegramUsername} ${transferNote}` : telegramUsername);
 };
+
+router.get("/:token/qr.png", async (req, res, next) => {
+  try {
+    const token = req.params.token;
+    const participant = await getParticipantByValidToken(token);
+    const description = buildTransferDescription(participant.telegram_username, participant.bill.note);
+
+    const qrPng = await generateVietQrPng({
+      bankCode: env.VIETQR_BANK_CODE,
+      accountNumber: env.VIETQR_ACCOUNT_NUMBER,
+      accountName: env.VIETQR_ACCOUNT_NAME,
+      amount: participant.amount,
+      description,
+    });
+
+    res.status(200).type("png").send(qrPng);
+  } catch (error) {
+    logError("Failed to render pay QR png", error, { tokenPrefix: req.params.token.slice(0, 8) });
+    next(error);
+  }
+});
 
 router.get("/:token", async (req, res, next) => {
   try {
@@ -41,8 +61,7 @@ router.get("/:token", async (req, res, next) => {
       return;
     }
 
-    const compactPayId = buildCompactPayId(participant.bill_id, participant.telegram_id);
-    const description = sanitizeTransferDescription(`${compactPayId}-${participant.telegram_username}`);
+    const description = buildTransferDescription(participant.telegram_username, participant.bill.note);
     logInfo("Rendering unpaid QR", {
       participantId: participant.id,
       billId: participant.bill_id,
