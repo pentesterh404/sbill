@@ -53,6 +53,7 @@ export function createApp() {
           <h2>Telegram Commands</h2>
           <ul>
             <li><code>/s &lt;total_amount&gt; [&lt;num_people&gt;] [&lt;note&gt;]</code> - Create bill and send split QR immediately in group.</li>
+            <li><code>/s &lt;bank_code&gt; &lt;account_number&gt; &lt;total_amount&gt; &lt;num_people&gt; [&lt;note&gt;]</code> - Create bill with dynamic bank/account from command.</li>
           </ul>
         </body>
       </html>

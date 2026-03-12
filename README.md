@@ -27,11 +27,19 @@ npm run dev
 ```
 
 ## Telegram Command
-- `/s <total_amount> [num_people] [note]`
+- Legacy: `/s <total_amount> [num_people] [note]`
+- New: `/s <bank_code> <account_number> <total_amount> <num_people> [note]`
 
 Examples:
 - `/s 10k 4 an_trua`
 - `/s 10k an_trua` (auto `num_people = 1`)
+- `/s ocb 0912345678 50k 4 an_uong`
+
+Bank alias mapping is loaded from:
+- `data/bank_bins.txt`
+
+Example mapping:
+- `ocb=970448`
 
 ## Set Webhook Quickly
 ```bash

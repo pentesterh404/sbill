@@ -1,0 +1,5 @@
+# bank_alias=bank_bin
+ocb=970448
+vcb=970436
+bidv=970418
+tpbank=970423

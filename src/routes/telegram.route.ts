@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { env } from "../config";
 import { AppError } from "../lib/errors";
 import { logError, logInfo } from "../lib/logger";
+import { resolveBankBin } from "../services/bank-map.service";
 import { createBill, parseSplitCommand } from "../services/bill.service";
 import { sendMessage, sendPhotoBuffer } from "../services/telegram.service";
 import { generateVietQrPng } from "../services/vietqr.service";
@@ -100,17 +101,21 @@ router.post("/webhook", async (req, res) => {
       });
 
       const transferNote = parsed.note?.trim() || "(khong co)";
-      const bankName = env.VIETQR_BANK_NAME ?? env.VIETQR_BANK_CODE;
+      const bankCode = parsed.bankAlias ? resolveBankBin(parsed.bankAlias) : env.VIETQR_BANK_CODE;
+      const accountNumber = parsed.accountNumber ?? env.VIETQR_ACCOUNT_NUMBER;
+      const bankName = parsed.bankAlias
+        ? `${parsed.bankAlias.toUpperCase()} (${bankCode})`
+        : (env.VIETQR_BANK_NAME ?? env.VIETQR_BANK_CODE);
       const qrPng = await generateVietQrPng({
-        bankCode: env.VIETQR_BANK_CODE,
-        accountNumber: env.VIETQR_ACCOUNT_NUMBER,
+        bankCode,
+        accountNumber,
         accountName: env.VIETQR_ACCOUNT_NAME,
         amount: bill.per_person_amount,
       });
       const caption =
         `<b>Thong tin chia bill:</b>\n` +
         `Bank: <code>${escapeHtml(bankName)}</code>\n` +
-        `STK: <code>${escapeHtml(env.VIETQR_ACCOUNT_NUMBER)}</code>\n` +
+        `STK: <code>${escapeHtml(accountNumber)}</code>\n` +
         `So tien: <code>${bill.total_amount}</code>\n` +
         `So nguoi: <code>${parsed.numPeople}</code>\n` +
         `Moi nguoi: <code>${bill.per_person_amount}</code>\n` +
